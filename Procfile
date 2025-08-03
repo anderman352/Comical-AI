@@ -1,0 +1,1 @@
+echo "web: gunicorn server:app" > Procfile

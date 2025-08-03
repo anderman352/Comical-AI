@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CBAM Spot Hopper</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <style>
+    body { background-color: #1f2937; color: #f9fafb; font-family: Arial, sans-serif; }
+    .card { background-color: #374151; border-radius: 8px; padding: 16px; margin: 8px 0; }
+    .map-placeholder { height: 200px; background: #4b5563; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const SpotHopper = () => {
+      // State for inputs and outputs
+      const [form, setForm] = useState({
+        date: '2025-08-03',
+        startTime: '16:00',
+        startLocation: 'Union Square, NYC',
+        maxSpots: 4,
+        transport: ['walk', 'subway'],
+        buffer: 15
+      });
+      const [itinerary, setItinerary] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [progress, setProgress] = useState(0);
+      const [skips, setSkips] = useState({});
+
+      // Handle form input changes
+      const handleInput = (e) => {
+        const { name, value, type, checked } = e.target;
+        if (type === 'checkbox') {
+          setForm(prev => ({
+            ...prev,
+            transport: checked
+              ? [...prev.transport, value]
+              : prev.transport.filter(t => t !== value)
+          }));
+        } else {
+          setForm(prev => ({ ...prev, [name]: value }));
+        }
+      };
+
+      // Generate itinerary
+      const generateItinerary = async () => {
+        setLoading(true);
+        setProgress(0);
+        const interval = setInterval(() => setProgress(p => Math.min(p + 33, 100)), 500);
+        try {
+          const response = await axios.post('http://localhost:5000/generate', form, {
+            headers: { 'Content-Type': 'application/json' }
+          });
+          setItinerary(response.data.itinerary);
+        } catch (error) {
+          console.error('Error generating itinerary:', error);
+          alert('Failed to generate itinerary. Try again or use cached data.');
+        }
+        clearInterval(interval);
+        setProgress(100);
+        setLoading(false);
+      };
+
+      // Handle venue skip
+      const handleSkip = async (venueId, skipType, reminder) => {
+        try {
+          await axios.post('http://localhost:5000/skip', { venueId, skipType, reminder });
+          setSkips(prev => ({ ...prev, [venueId]: { skipType, reminder } }));
+          generateItinerary(); // Regenerate excluding skipped venue
+        } catch (error) {
+          console.error('Error skipping venue:', error);
+        }
+      };
+
+      // Generate outreach template
+      const generateOutreach = async (venue) => {
+        try {
+          const response = await axios.post('http://localhost:5000/outreach', {
+            venue,
+            user: { name: 'Your Name', email: 'your.email@example.com', experience: 'beginner' }
+          });
+          alert('Outreach Draft:\n' + response.data.template);
+        } catch (error) {
+          console.error('Error generating outreach:', error);
+        }
+      };
+
+      return (
+        <div className="max-w-4xl mx-auto p-4">
+          <h1 className="text-2xl font-bold mb-4">CBAM Spot Hopper</h1>
+          <p className="text-sm mb-2">Your data is encrypted and deleted post-session unless saved. MFA to be added in version 3.</p>
+          
+          {/* Input Form */}
+          <div className="card">
+            <h2 className="text-lg font-semibold mb-2">Plan Your Evening</h2>
+            <div className="grid grid-cols-1 gap-4">
+              <div>
+                <label className="block">Date</label>
+                <input
+                  type="date"
+                  name="date"
+                  value={form.date}
+                  onChange={handleInput}
+                  className="w-full bg-gray-700 text-white p-2 rounded"
+                />
+              </div>
+              <div>
+                <label className="block">Start Time (for day jobs/late nights)</label>
+                <input
+                  type="time"
+                  name="startTime"
+                  value={form.startTime}
+                  onChange={handleInput}
+                  className="w-full bg-gray-700 text-white p-2 rounded"
+                />
+                <p className="text-xs mt-1">Set earliest available time to fit your schedule.</p>
+              </div>
+              <div>
+                <label className="block">Start Location</label>
+                <input
+                  type="text"
+                  name="startLocation"
+                  value={form.startLocation}
+                  onChange={handleInput}
+                  className="w-full bg-gray-700 text-white p-2 rounded"
+                  placeholder="e.g., Union Square, NYC"
+                />
+              </div>
+              <div>
+                <label className="block">Max Spots (3-6)</label>
+                <input
+                  type="range"
+                  name="maxSpots"
+                  min="3"
+                  max="6"
+                  value={form.maxSpots}
+                  onChange={handleInput}
+                  className="w-full"
+                />
+                <span>{form.maxSpots}</span>
+              </div>
+              <div>
+                <label className="block">Transport</label>
+                <label><input type="checkbox" name="transport" value="walk" checked={form.transport.includes('walk')} onChange={handleInput} /> Walk</label>
+                <label><input type="checkbox" name="transport" value="subway" checked={form.transport.includes('subway')} onChange={handleInput} /> Subway</label>
+              </div>
+              <div>
+                <label className="block">Buffer Between Gigs (min)</label>
+                <input
+                  type="range"
+                  name="buffer"
+                  min="10"
+                  max="30"
+                  value={form.buffer}
+                  onChange={handleInput}
+                  className="w-full"
+                />
+                <span>{form.buffer} min</span>
+              </div>
+            </div>
+            <p className="text-sm mt-2">Itinerary generated in ~2-3 seconds.</p>
+            <button
+              onClick={generateItinerary}
+              className="mt-4 bg-blue-600 hover:bg-blue-700 text-white p-2 rounded"
+              disabled={loading}
+            >
+              {loading ? 'Generating...' : 'Generate Itinerary'}
+            </button>
+            {loading && (
+              <div className="mt-2">
+                <div className="w-full bg-gray-600 rounded-full h-2.5">
+                  <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+                </div>
+                <p>Building your night: ~{Math.ceil((100 - progress) / 33)}s left</p>
+              </div>
+            )}
+          </div>
+
+          {/* Output: Itinerary */}
+          {itinerary.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-lg font-semibold mb-2">Your Itinerary</h2>
+              <div className="map-placeholder flex items-center justify-center">Map: Pins for venues, green=walk, blue=subway</div>
+              {itinerary.map((spot, index) => (
+                <div key={spot.venueId} className="card">
+                  <h3 className="font-bold">{index + 1}. {spot.name} - {spot.time}</h3>
+                  <p>{spot.address}</p>
+                  <p>Travel: {spot.travel}</p>
+                  <p>Notes: {spot.notes}</p>
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => generateOutreach(spot)}
+                      className="bg-green-600 hover:bg-green-700 text-white p-1 rounded text-sm"
+                    >
+                      Book Outreach
+                    </button>
+                    <button
+                      onClick={() => handleSkip(spot.venueId, 'one_time', null)}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white p-1 rounded text-sm"
+                    >
+                      Skip (One Time)
+                    </button>
+                    <button
+                      onClick={() => handleSkip(spot.venueId, 'week', null)}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white p-1 rounded text-sm"
+                    >
+                      Skip (This Week)
+                    </button>
+                    <button
+                      onClick={() => handleSkip(spot.venueId, 'forever', '30_days')}
+                      className="bg-red-600 hover:bg-red-700 text-white p-1 rounded text-sm"
+                    >
+                      Skip (Forever, Remind in 30 Days)
+                    </button>
+                    <button
+                      className="bg-gray-600 hover:bg-gray-700 text-white p-1 rounded text-sm"
+                    >
+                      Add to Calendar
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <p className="mt-4">Total: {itinerary.length} spots, ~{itinerary.length * 5} min stage time, ~{itinerary.reduce((sum, spot) => sum + (parseInt(spot.travel) || 0), 0)} min travel. Buffers reduce domino risks.</p>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    ReactDOM.render(<SpotHopper />, document.getElementById('root'));
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+# Node.js / React ignores
+node_modules/
+build/
+
+# Python ignores
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+
+# Database and env
+*.db
+.env
+
+# Misc
+*.log
